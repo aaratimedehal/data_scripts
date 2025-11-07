@@ -145,7 +145,7 @@ KPI_MAPPING = {
     "xledger_cost_discounts": "Discounts",
     #app opens
     "app_opens_per_customer": "Customers without a device (Avg.)",
-    "app_opens_per_customer_with_device": "Customer with a device (Avg.)",
+    "app_opens_per_customer_with_device": "Customers with a device (Avg.)",
     #intercom
     "customer_satisfaction_total_score": "Customer satisfaction - Total score",
     "customer_satisfaction_ai_teammate": "Customer satisfaction - AI teammate",
