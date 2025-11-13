@@ -77,7 +77,10 @@ KPI_MAPPING = {
     "hansen_consumption_customers": "Customers in Delivery (FI Consumption)",
     "hansen_production_customers": "Customers in Delivery (FI Production)",
     #"winback": "Winback",
-    "churned": "Churned Customers",
+    #"churned": "Churned Customers",
+    "churned_se": "Churned Customers (SE)",
+    "churned_fi": "Churned Customers (FI)",
+
     #mimer
     "fcrd_up_d1": "FCR-D UP D1",
     "fcrd_up_d2": "FCR-D UP D2",
