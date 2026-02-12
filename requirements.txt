@@ -23,3 +23,9 @@ urllib3>=2.0.0
 
 # Utilities
 python-dateutil>=2.8.0
+
+# Anthropic Claude API
+anthropic>=0.34.0
+
+# Charting
+matplotlib>=3.7.0
