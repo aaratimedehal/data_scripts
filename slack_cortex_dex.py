@@ -5,6 +5,7 @@ Integrates Slack with Snowflake Cortex Agent for natural language queries about 
 import os
 import json
 import logging
+import re
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
@@ -788,92 +789,6 @@ def format_slack_response(response_data, question=""):
     return blocks, text_fallback
 
 
-def get_welcome_message():
-    """Generate welcome message with instructions and example questions"""
-    return {
-        "blocks": [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": "👋 Welcome to Dex - Your Analytics Assistant"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "I'm *Dex* (Data Expert), your AI assistant for Greenely contract analytics. I can answer questions about contracts, signings, churn, channels, and more using Snowflake Cortex Agent (many more to come!).\n\n*How to use:*\n• Use `/dex [your question]` to ask me anything\n• Or mention me: `@Dex [your question]`\n• Or just ask a question in this channel"
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*📊 Example Questions I Can Answer:*"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Signed Contracts / Customers Signed:*\n• How many signed contracts this month?\n• How many customers signed in Finland yesterday?\n• Show me signed contracts by channel this year\n• What's the trend of signed contracts over the past 6 months?"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Channel Analysis:*\n• Which channels perform best for contract signings?\n• Show me contract distribution by channel group\n• Compare contract metrics across channels"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Country/Market Analysis:*\n• How many contracts do we have in Sweden vs Finland?\n• Show me contract metrics by country\n• What's the growth rate by market?"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Time-based Analysis:*\n• How many contracts were signed this week?\n• Show me monthly contract signings for the past year\n• What's the contract growth rate month-over-month?"
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Churn Analysis:*\n• What's the churn rate by country?\n• Show me churned contracts from last month\n• What's the churn rate for contracts signed last quarter?"
-                }
-            },
-            {
-                "type": "divider"
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*💡 Tips:*\n• Be specific with time periods (e.g., 'this month', 'last quarter', '2025')\n• You can filter by country (SE, FI), channel, or other dimensions\n• I'll show you the SQL query used if you click 'Show Query Details'\n• Processing typically takes a few seconds\n• Use `/dex-help` anytime to see this message again"
-                }
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {
-                        "type": "mrkdwn",
-                        "text": "Powered by Snowflake Cortex Agent • Using CONTRACT_SEMANTIC semantic view"
-                    }
-                ]
-            }
-        ]
-    }
-
-
 @app.command("/dex-help")
 def handle_dex_help(ack, respond):
     """Handle /dex-help command to show help message"""
@@ -949,7 +864,7 @@ def handle_message(message, say):
         say(f"❌ Error posting response: {str(e)}", thread_ts=message.get("ts"))
 
 
-@app.action("quick_question")
+@app.action(re.compile("^quick_question"))
 def handle_quick_question(ack, body, respond, client):
     """Handle quick start question button clicks"""
     ack()
@@ -1373,7 +1288,7 @@ def get_welcome_message():
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": "👋 Welcome to Dex - Your Contract Analytics Assistant"
+                    "text": "👋 Welcome to Dex - Your Analytics Assistant"
                 }
             },
             {
@@ -1402,7 +1317,7 @@ def get_welcome_message():
                             "type": "plain_text",
                             "text": "📈 Contracts signed last month"
                         },
-                        "action_id": "quick_question",
+                        "action_id": "quick_question_1",
                         "value": "How many contracts were signed last month?"
                     },
                     {
@@ -1411,7 +1326,7 @@ def get_welcome_message():
                             "type": "plain_text",
                             "text": "📉 Churn last month"
                         },
-                        "action_id": "quick_question",
+                        "action_id": "quick_question_2",
                         "value": "How many contracts churned last month?"
                     },
                     {
@@ -1420,7 +1335,7 @@ def get_welcome_message():
                             "type": "plain_text",
                             "text": "🇸🇪 Customers in Sweden"
                         },
-                        "action_id": "quick_question",
+                        "action_id": "quick_question_3",
                         "value": "How many customers were signed this month in Sweden?"
                     }
                 ]
@@ -1434,7 +1349,7 @@ def get_welcome_message():
                             "type": "plain_text",
                             "text": "📊 Net growth this month"
                         },
-                        "action_id": "quick_question",
+                        "action_id": "quick_question_4",
                         "value": "What is the current customer net growth this month?"
                     },
                     {
@@ -1443,7 +1358,7 @@ def get_welcome_message():
                             "type": "plain_text",
                             "text": "🔌 Saveye connected"
                         },
-                        "action_id": "quick_question",
+                        "action_id": "quick_question_5",
                         "value": "How many customers in Sverige have a Saveye connected?"
                     },
                     {
@@ -1452,7 +1367,7 @@ def get_welcome_message():
                             "type": "plain_text",
                             "text": "📈 Total signed customers"
                         },
-                        "action_id": "quick_question",
+                        "action_id": "quick_question_6",
                         "value": "How many total signed customers do we have?"
                     }
                 ]
@@ -1467,13 +1382,13 @@ def get_welcome_message():
                     "text": "_Or type `/dex [your question]` to ask anything else_"
                 }
             },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*💡 What I Can Help With:*\n✅ Contract signings, churn, and growth metrics\n✅ Channel and acquisition analysis\n✅ Device connectivity (Saveye, EV, Charging Station, Battery)\n✅ Contract types, discounts, and payment methods\n✅ Country/market analysis (Sweden, Finland)\n"
-                }
-            },
+            # {
+            #     "type": "section",
+            #     "text": {
+            #         "type": "mrkdwn",
+            #         "text": "*💡 What I Can Help With:*\n✅ Contract signings, churn, and growth metrics\n✅ Channel and acquisition analysis\n✅ Device connectivity (Saveye, EV, Charging Station, Battery)\n✅ Contract types, discounts, and payment methods\n✅ Country/market analysis (Sweden, Finland)\n"
+            #     }
+            # },
             {
                 "type": "divider"
             },
@@ -1481,7 +1396,7 @@ def get_welcome_message():
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*💡 Tips:*\n• Be specific with time periods (e.g., 'this month', 'last quarter', '2025')\n• You can filter by country (SE, FI), channel, or other dimensions\n• I'll show you the SQL query used if you click 'Show Query Details'\n• Processing typically takes a few seconds\n• Use `/dex-help` anytime to see this message again"
+                    "text": "*💡 Tips:*\n• Be specific with time periods (e.g., 'this month', 'last quarter', '2025')\n• I'll show you the SQL query used if you click 'Show Query Details'\n• Processing typically takes 20-30 seconds\n• Use `/dex-help` anytime to see this message again"
                 }
             },
             {
@@ -1495,14 +1410,6 @@ def get_welcome_message():
             }
         ]
     }
-
-
-@app.command("/dex-help")
-def handle_dex_help(ack, respond):
-    """Handle /dex-help command to show help message"""
-    ack()
-    welcome_msg = get_welcome_message()
-    respond(blocks=welcome_msg["blocks"], text="Dex Help - Contract Analytics Assistant")
 
 
 @app.event("member_joined_channel")
@@ -1621,36 +1528,25 @@ def handle_dex_command(ack, respond, command):
         _recent_commands.append(command_key)
         if not question:
             # Show welcome message when /dex is used without a question
-            # Use respond() immediately (it's fast) - then optionally send full message via chat_postMessage
-            channel_id = command.get("channel_id")
-            
-            # First, respond quickly with a simple message
-            respond(
-                "👋 Welcome to Dex! Loading full instructions...",
-                response_type="ephemeral"
-            )
-            
-            # Then send the full welcome message (this can be slower)
             try:
                 welcome_msg = get_welcome_message()
-                if channel_id:
-                    app.client.chat_postMessage(
-                        channel=channel_id,
-                        blocks=welcome_msg["blocks"],
-                        text="👋 Welcome to Dex - Your Contract Analytics Assistant"
-                    )
+                # Send full welcome message directly (replaces simple text message)
+                respond(
+                    blocks=welcome_msg["blocks"],
+                    text="👋 Welcome to Dex - Your Contract Analytics Assistant",
+                    response_type="in_channel"
+                )
             except Exception as welcome_error:
                 logger.error(f"Error showing welcome message: {welcome_error}", exc_info=True)
                 # Fallback: send simple text message
-                if channel_id:
-                    app.client.chat_postMessage(
-                        channel=channel_id,
-                        text=(
-                            "👋 Welcome to Dex - Your Contract Analytics Assistant!\n\n"
-                            "Use `/dex [your question]` to ask me anything about contracts, signings, churn, channels, and more.\n\n"
-                            "Example: `/dex how many contracts were signed last month?`"
-                        )
-                    )
+                respond(
+                    text=(
+                        "👋 Welcome to Dex - Your Contract Analytics Assistant!\n\n"
+                        "Use `/dex [your question]` to ask me anything about contracts, signings, churn, channels, and more.\n\n"
+                        "Example: `/dex how many contracts were signed last month?`"
+                    ),
+                    response_type="in_channel"
+                )
             return
         
         # Call Cortex Agent (when ready) or show placeholder
