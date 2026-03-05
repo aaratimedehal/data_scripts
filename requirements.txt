@@ -21,6 +21,16 @@ requests>=2.31.0
 httplib2>=0.22.0
 urllib3>=2.0.0
 
+# Slack
+slack-bolt>=1.18.0
+slack-sdk>=3.27.0
+
+# Flask (for OAuth HTTP server)
+flask>=3.0.0
+
+# ML / forecasting
+scikit-learn>=1.3.0
+
 # Utilities
 python-dateutil>=2.8.0
 
