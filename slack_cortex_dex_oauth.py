@@ -2052,3 +2052,4 @@ if __name__ == "__main__":
     
     # Start Flask server
     flask_app.run(host="0.0.0.0", port=port, debug=False)# Trigger redeploy
+# Latest version with URL encoding fix - Fri Mar  6 13:46:31 CET 2026
