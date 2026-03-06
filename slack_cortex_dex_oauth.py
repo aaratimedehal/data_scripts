@@ -30,6 +30,9 @@ SLACK_CLIENT_ID = os.getenv("CLIENT_ID_DEX") or os.getenv("SLACK_CLIENT_ID")
 SLACK_CLIENT_SECRET = os.getenv("CLIENT_SECRET_DEX") or os.getenv("SLACK_CLIENT_SECRET")
 SLACK_SIGNING_SECRET = os.getenv("SIGNING_SECRET_DEX") or os.getenv("SLACK_SIGNING_SECRET")
 SLACK_BOT_URL = os.getenv("SLACK_BOT_URL", "https://your-domain.com")  # Your hosting URL
+# Ensure SLACK_BOT_URL always has https://
+if SLACK_BOT_URL and not SLACK_BOT_URL.startswith("http"):
+    SLACK_BOT_URL = f"https://{SLACK_BOT_URL}"
 
 # Cortex Agent configuration (shared across all workspaces)
 AGENT_ENDPOINT = os.getenv("AGENT_ENDPOINT")
