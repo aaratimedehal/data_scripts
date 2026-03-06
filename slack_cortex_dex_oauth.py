@@ -14,6 +14,7 @@ from slack_bolt.oauth import OAuthFlow
 from slack_bolt.oauth.oauth_settings import OAuthSettings
 from slack_sdk.errors import SlackApiError
 from flask import Flask, request, make_response
+from urllib.parse import quote_plus
 import requests
 import time
 from collections import deque
@@ -1965,7 +1966,8 @@ def index():
     if not SLACK_CLIENT_ID:
         return "❌ Error: SLACK_CLIENT_ID not configured", 500
     
-    install_url = f"https://slack.com/oauth/v2/authorize?client_id={SLACK_CLIENT_ID}&scope=app_mentions:read,channels:history,chat:write,commands,im:history,im:read,im:write&redirect_uri={SLACK_BOT_URL}/slack/oauth_redirect"
+    redirect_uri = f"{SLACK_BOT_URL}/slack/oauth_redirect"
+    install_url = f"https://slack.com/oauth/v2/authorize?client_id={SLACK_CLIENT_ID}&scope=app_mentions:read,channels:history,chat:write,commands,im:history,im:read,im:write&redirect_uri={quote_plus(redirect_uri)}"
     
     return f"""
     <!DOCTYPE html>
