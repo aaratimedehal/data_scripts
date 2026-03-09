@@ -1944,8 +1944,16 @@ def handle_dex_command(ack, respond, command):
 # Flask routes for OAuth and Slack events
 @flask_app.route("/slack/install", methods=["GET"])
 def install():
-    """Handle OAuth installation - 'Add to Slack' button"""
-    return handler.handle(request)
+    """Handle OAuth installation - redirect to Slack OAuth URL"""
+    if not SLACK_CLIENT_ID:
+        return "❌ Error: SLACK_CLIENT_ID not configured", 500
+    
+    redirect_uri = f"{SLACK_BOT_URL}/slack/oauth_redirect"
+    install_url = f"https://slack.com/oauth/v2/authorize?client_id={SLACK_CLIENT_ID}&scope=app_mentions:read,channels:history,chat:write,commands,im:history,im:read,im:write&redirect_uri={quote_plus(redirect_uri)}"
+    
+    # Redirect directly to Slack OAuth
+    from flask import redirect
+    return redirect(install_url)
 
 
 @flask_app.route("/slack/oauth_redirect", methods=["GET"])
