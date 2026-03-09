@@ -72,8 +72,12 @@ class FileInstallationStore:
     
     def _save_data(self, data):
         """Save workspace tokens to file"""
-        with open(self.file_path, 'w') as f:
-            json.dump(data, f, indent=2)
+        try:
+            with open(self.file_path, 'w') as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving workspace tokens: {e}")
+            raise
     
     def save(self, installation):
         """Save installation data for a workspace"""
@@ -125,7 +129,15 @@ class FileOAuthStateStore:
     def __init__(self, expiration_seconds=600, base_dir="./.slack_oauth_states"):
         self.expiration_seconds = expiration_seconds
         self.base_dir = base_dir
-        os.makedirs(base_dir, exist_ok=True)
+        try:
+            os.makedirs(base_dir, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Error creating OAuth state directory {base_dir}: {e}")
+            # Fallback to temp directory if current directory not writable (e.g., Railway)
+            import tempfile
+            self.base_dir = os.path.join(tempfile.gettempdir(), ".slack_oauth_states")
+            os.makedirs(self.base_dir, exist_ok=True)
+            logger.info(f"Using fallback state directory: {self.base_dir}")
     
     def issue(self, *args, **kwargs):
         """Issue a new state"""
@@ -149,8 +161,9 @@ class FileOAuthStateStore:
                     return True
                 else:
                     os.remove(file_path)  # Expired
-            except:
-                pass
+                    logger.warning(f"OAuth state expired: {state}")
+            except Exception as e:
+                logger.error(f"Error consuming OAuth state {state}: {e}")
         return False
 
 # Set up logging
@@ -1947,13 +1960,21 @@ def handle_dex_command(ack, respond, command):
 @flask_app.route("/slack/install", methods=["GET"])
 def install():
     """Handle OAuth installation - let Slack Bolt handle it with proper state management"""
-    return handler.handle(request)
+    try:
+        return handler.handle(request)
+    except Exception as e:
+        logger.error(f"Error handling OAuth install: {e}", exc_info=True)
+        return f"❌ Error starting OAuth flow: {str(e)}", 500
 
 
 @flask_app.route("/slack/oauth_redirect", methods=["GET"])
 def oauth_redirect():
     """Handle OAuth redirect after installation"""
-    return handler.handle(request)
+    try:
+        return handler.handle(request)
+    except Exception as e:
+        logger.error(f"Error handling OAuth redirect: {e}", exc_info=True)
+        return f"❌ Error during OAuth installation: {str(e)}", 500
 
 
 @flask_app.route("/slack/events", methods=["POST"])
