@@ -195,16 +195,24 @@ app = App(
 @app.middleware
 def set_bot_token(context, next_):
     """Set bot token from installation store based on workspace"""
-    team_id = context.get("team_id") or context.get("enterprise_id")
-    if team_id:
-        installation = installation_store.find_installation(team_id=team_id)
-        if installation and installation.bot_token:
-            context["bot_token"] = installation.bot_token
-            # Update app client with workspace-specific token
-            from slack_sdk import WebClient
-            context["client"] = WebClient(token=installation.bot_token)
-            # Also update app.client for backward compatibility with existing code
-            app.client = context["client"]
+    try:
+        team_id = context.get("team_id") or context.get("enterprise_id")
+        if team_id:
+            installation = installation_store.find_installation(team_id=team_id)
+            if installation and installation.bot_token:
+                context["bot_token"] = installation.bot_token
+                # Update app client with workspace-specific token
+                from slack_sdk import WebClient
+                context["client"] = WebClient(token=installation.bot_token)
+                # Also update app.client for backward compatibility with existing code
+                app.client = context["client"]
+            else:
+                logger.warning(f"No installation found for workspace: {team_id}")
+        else:
+            logger.warning("No team_id or enterprise_id in context")
+    except Exception as e:
+        logger.error(f"Error in set_bot_token middleware: {e}", exc_info=True)
+        # Don't block the request - let it continue even if middleware fails
     next_()
 
 # SlackRequestHandler for Flask integration
@@ -1659,7 +1667,8 @@ def handle_dex_command(ack, respond, command):
     Supports both regular commands and thread replies.
     """
     # Acknowledge the command IMMEDIATELY (must be done within 3 seconds)
-    # This MUST be the very first thing - wrap in try-except to ensure it always succeeds
+    # This MUST be the very first thing - even before any other processing
+    # Call ack() synchronously without any delays
     try:
         ack()
     except Exception as ack_error:
@@ -1672,6 +1681,8 @@ def handle_dex_command(ack, respond, command):
             pass
         # Even if ack fails, we should still try to respond to the user
         # but the command might show as "dispatch_failed" in Slack
+    
+    # Now process the command (after ack is done)
     
     try:
         question = command.get("text", "").strip()
