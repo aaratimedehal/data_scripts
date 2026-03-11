@@ -94,15 +94,22 @@ class FileInstallationStore:
                 "installed_at": installation.installed_at or time.time()
             }
             self._save_data(data)
-            logger.info(f"Saved installation for workspace: {team_id}")
+            logger.info(f"✅ Saved installation for workspace: {team_id} ({installation.team_name})")
+            logger.info(f"📁 Installation saved to: {os.path.abspath(self.file_path)}")
+        else:
+            logger.error(f"❌ Cannot save installation: No team_id or enterprise_id found")
     
     def find_installation(self, *, enterprise_id=None, team_id=None, user_id=None, is_enterprise_install=None):
         """Find installation data for a workspace"""
         data = self._load_data()
         lookup_id = team_id or enterprise_id
+        logger.info(f"🔍 Looking for installation: team_id={team_id}, enterprise_id={enterprise_id}, lookup_id={lookup_id}")
+        logger.info(f"📁 Checking file: {os.path.abspath(self.file_path)}")
+        logger.info(f"📊 Found {len(data)} installations in store")
         if lookup_id and lookup_id in data:
             from slack_sdk.oauth import Installation
             install_data = data[lookup_id]
+            logger.info(f"✅ Found installation for workspace: {lookup_id}")
             return Installation(
                 bot_token=install_data.get("bot_token"),
                 bot_id=install_data.get("bot_id"),
@@ -112,6 +119,10 @@ class FileInstallationStore:
                 enterprise_id=install_data.get("enterprise_id"),
                 installed_at=install_data.get("installed_at")
             )
+        else:
+            logger.warning(f"❌ Installation NOT found for workspace: {lookup_id}")
+            if lookup_id:
+                logger.warning(f"Available workspace IDs: {list(data.keys())}")
         return None
     
     def delete_installation(self, *, enterprise_id=None, team_id=None, user_id=None):
