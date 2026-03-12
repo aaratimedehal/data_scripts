@@ -203,49 +203,44 @@ app = App(
 )
 
 # Middleware to set bot token per workspace
-# IMPORTANT: This middleware must be FAST and non-blocking to avoid delaying ack()
-# For slash commands, ack() doesn't need the bot token, so we can skip heavy operations
+# CRITICAL: This middleware MUST NOT block - ack() must be called within 3 seconds
+# For slash commands, ack() works WITHOUT a token, so we skip ALL operations here
 @app.middleware
 def set_bot_token(context, next_):
     """Set bot token from installation store based on workspace"""
-    # CRITICAL: For slash commands, ack() must be called within 3 seconds
-    # Slash commands don't need the bot token for ack(), so we can be fast here
+    # CRITICAL: For slash commands, call next() IMMEDIATELY without any operations
+    # This ensures ack() can be called as fast as possible
+    is_slash_command = context.get("command") is not None
+    
+    if is_slash_command:
+        # For slash commands: skip ALL operations, call next() immediately
+        # The handler will call ack() first, then do installation lookup if needed
+        next_()
+        return
+    
+    # For non-slash commands (events, actions), do the lookup
     try:
-        # Check if this is a slash command - if so, skip heavy lookup and let handler call ack() first
-        is_slash_command = context.get("command") is not None
-        
         team_id = context.get("team_id") or context.get("enterprise_id")
         if team_id:
-            # For slash commands, do a quick check but don't block
-            # For other events, do full lookup
-            if is_slash_command:
-                # Fast path for slash commands - just set a flag, don't do heavy lookup
-                # The handler will call ack() immediately, then we can do lookup if needed
-                context["_team_id"] = team_id  # Store for later use
-            else:
-                # For non-slash commands, do the full lookup
-                try:
-                    installation = installation_store.find_installation(team_id=team_id)
-                    if installation and installation.bot_token:
-                        context["bot_token"] = installation.bot_token
-                        # Update app client with workspace-specific token
-                        from slack_sdk import WebClient
-                        context["client"] = WebClient(token=installation.bot_token)
-                        # Also update app.client for backward compatibility with existing code
-                        app.client = context["client"]
-                    else:
-                        # Log warning but don't block
-                        logger.warning(f"No installation found for workspace: {team_id}")
-                except Exception as lookup_error:
-                    # If lookup fails, log but don't block
-                    logger.error(f"Error looking up installation for {team_id}: {lookup_error}")
+            try:
+                installation = installation_store.find_installation(team_id=team_id)
+                if installation and installation.bot_token:
+                    context["bot_token"] = installation.bot_token
+                    # Update app client with workspace-specific token
+                    from slack_sdk import WebClient
+                    context["client"] = WebClient(token=installation.bot_token)
+                    # Also update app.client for backward compatibility
+                    app.client = context["client"]
+                else:
+                    logger.warning(f"No installation found for workspace: {team_id}")
+            except Exception as lookup_error:
+                logger.error(f"Error looking up installation for {team_id}: {lookup_error}")
         else:
             logger.warning("No team_id or enterprise_id in context")
     except Exception as e:
         logger.error(f"Error in set_bot_token middleware: {e}", exc_info=True)
-        # CRITICAL: Don't block the request - let it continue even if middleware fails
-        # The handler will call ack() which is more important than setting the token
-    # Always call next() immediately to continue to handler (which will call ack())
+    
+    # Always call next() to continue
     next_()
 
 # SlackRequestHandler for Flask integration
@@ -1702,18 +1697,21 @@ def handle_dex_command(ack, respond, command):
     # Acknowledge the command IMMEDIATELY (must be done within 3 seconds)
     # This MUST be the very first thing - even before any other processing
     # Call ack() synchronously without any delays
+    # In OAuth mode, ack() works WITHOUT a bot token, so this should always succeed
     try:
         ack()
+        logger.info("✅ Successfully acknowledged /dex command")
     except Exception as ack_error:
-        # If ack fails, log it but continue - this is critical for Slack
-        logger.error(f"Failed to acknowledge /dex command: {ack_error}", exc_info=True)
+        # If ack fails, this is critical - log it and try again
+        logger.error(f"❌ CRITICAL: Failed to acknowledge /dex command: {ack_error}", exc_info=True)
         # Try once more as a fallback
         try:
             ack()
-        except:
-            pass
-        # Even if ack fails, we should still try to respond to the user
-        # but the command might show as "dispatch_failed" in Slack
+            logger.info("✅ Successfully acknowledged /dex command on retry")
+        except Exception as retry_error:
+            logger.error(f"❌ CRITICAL: Failed to acknowledge /dex command on retry: {retry_error}", exc_info=True)
+            # If ack fails completely, we can't do anything - Slack will show "dispatch_failed"
+            return  # Exit early - can't proceed without ack()
     
     # Now process the command (after ack is done)
     # IMPORTANT: ack() has been called, so Slack won't show "dispatch_failed" anymore
@@ -2080,7 +2078,15 @@ def oauth_redirect():
 @flask_app.route("/slack/events", methods=["POST"])
 def slack_events():
     """Handle Slack events (commands, messages, etc.)"""
-    return handler.handle(request)
+    # CRITICAL: Wrap in try-except to ensure we always return a response to Slack
+    # This prevents "dispatch_failed" errors
+    try:
+        return handler.handle(request)
+    except Exception as e:
+        logger.error(f"❌ CRITICAL: Error in Flask /slack/events route: {e}", exc_info=True)
+        # Return 200 OK to Slack even on error to prevent "dispatch_failed"
+        # Slack Bolt will handle the error internally
+        return make_response("", 200)
 
 
 @flask_app.route("/", methods=["GET"])
