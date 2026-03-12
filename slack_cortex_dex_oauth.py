@@ -203,27 +203,49 @@ app = App(
 )
 
 # Middleware to set bot token per workspace
+# IMPORTANT: This middleware must be FAST and non-blocking to avoid delaying ack()
+# For slash commands, ack() doesn't need the bot token, so we can skip heavy operations
 @app.middleware
 def set_bot_token(context, next_):
     """Set bot token from installation store based on workspace"""
+    # CRITICAL: For slash commands, ack() must be called within 3 seconds
+    # Slash commands don't need the bot token for ack(), so we can be fast here
     try:
+        # Check if this is a slash command - if so, skip heavy lookup and let handler call ack() first
+        is_slash_command = context.get("command") is not None
+        
         team_id = context.get("team_id") or context.get("enterprise_id")
         if team_id:
-            installation = installation_store.find_installation(team_id=team_id)
-            if installation and installation.bot_token:
-                context["bot_token"] = installation.bot_token
-                # Update app client with workspace-specific token
-                from slack_sdk import WebClient
-                context["client"] = WebClient(token=installation.bot_token)
-                # Also update app.client for backward compatibility with existing code
-                app.client = context["client"]
+            # For slash commands, do a quick check but don't block
+            # For other events, do full lookup
+            if is_slash_command:
+                # Fast path for slash commands - just set a flag, don't do heavy lookup
+                # The handler will call ack() immediately, then we can do lookup if needed
+                context["_team_id"] = team_id  # Store for later use
             else:
-                logger.warning(f"No installation found for workspace: {team_id}")
+                # For non-slash commands, do the full lookup
+                try:
+                    installation = installation_store.find_installation(team_id=team_id)
+                    if installation and installation.bot_token:
+                        context["bot_token"] = installation.bot_token
+                        # Update app client with workspace-specific token
+                        from slack_sdk import WebClient
+                        context["client"] = WebClient(token=installation.bot_token)
+                        # Also update app.client for backward compatibility with existing code
+                        app.client = context["client"]
+                    else:
+                        # Log warning but don't block
+                        logger.warning(f"No installation found for workspace: {team_id}")
+                except Exception as lookup_error:
+                    # If lookup fails, log but don't block
+                    logger.error(f"Error looking up installation for {team_id}: {lookup_error}")
         else:
             logger.warning("No team_id or enterprise_id in context")
     except Exception as e:
         logger.error(f"Error in set_bot_token middleware: {e}", exc_info=True)
-        # Don't block the request - let it continue even if middleware fails
+        # CRITICAL: Don't block the request - let it continue even if middleware fails
+        # The handler will call ack() which is more important than setting the token
+    # Always call next() immediately to continue to handler (which will call ack())
     next_()
 
 # SlackRequestHandler for Flask integration
@@ -1694,8 +1716,64 @@ def handle_dex_command(ack, respond, command):
         # but the command might show as "dispatch_failed" in Slack
     
     # Now process the command (after ack is done)
+    # IMPORTANT: ack() has been called, so Slack won't show "dispatch_failed" anymore
+    # Even if there are errors below, the command is acknowledged
     
     try:
+        # For slash commands, we need the bot token for respond() and chat_postMessage
+        # Do the installation lookup now (after ack() is called) so it doesn't delay ack()
+        team_id = command.get("team_id") or command.get("enterprise_id")
+        if team_id:
+            try:
+                installation = installation_store.find_installation(team_id=team_id)
+                if installation and installation.bot_token:
+                    # Set client now (after ack() is called)
+                    from slack_sdk import WebClient
+                    app.client = WebClient(token=installation.bot_token)
+                else:
+                    logger.warning(f"No installation found for workspace: {team_id}")
+                    # Still try to respond with helpful error
+                    error_msg = (
+                        "❌ **Installation Error**\n\n"
+                        "It looks like Dex isn't properly installed in this workspace. "
+                        "Please reinstall the app:\n"
+                        f"• Visit: {SLACK_BOT_URL}\n"
+                        "• Click 'Add to Slack'\n"
+                        "• Authorize the app\n\n"
+                        "If this persists, contact your administrator."
+                    )
+                    response_url = command.get("response_url")
+                    if response_url:
+                        requests.post(
+                            response_url,
+                            json={
+                                "text": error_msg,
+                                "response_type": "ephemeral"
+                            }
+                        )
+                    else:
+                        respond(error_msg)
+                    return
+            except Exception as lookup_error:
+                logger.error(f"Error looking up installation: {lookup_error}")
+                # Try to respond with error
+                try:
+                    error_msg = f"❌ Error: Could not find installation. Please reinstall the app from {SLACK_BOT_URL}"
+                    response_url = command.get("response_url")
+                    if response_url:
+                        requests.post(
+                            response_url,
+                            json={
+                                "text": error_msg,
+                                "response_type": "ephemeral"
+                            }
+                        )
+                    else:
+                        respond(error_msg)
+                except:
+                    pass
+                return
+        
         question = command.get("text", "").strip()
         
         # Get response_url for thread support (Slack provides this when command is in a thread)
